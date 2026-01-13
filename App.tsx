@@ -19,8 +19,7 @@ const UploadIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 // --- Configuração da API ---
-// Padrão Vite: busca primeiro nas variáveis de ambiente do deploy
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
 
 const App: React.FC = () => {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -89,7 +88,7 @@ const App: React.FC = () => {
             return;
         }
         if (!API_KEY) {
-            setError("Chave de API não encontrada. Verifique se definiu VITE_GEMINI_API_KEY no GitHub Secrets.");
+            setError("Chave de API não encontrada. Verifique VITE_GEMINI_API_KEY.");
             return;
         }
 
@@ -98,9 +97,9 @@ const App: React.FC = () => {
         setTranslatedText(null);
 
         try {
-            // Ajustado para a biblioteca correta @google/generative-ai
             const genAI = new GoogleGenerativeAI(API_KEY);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            // CORREÇÃO: Usando 'gemini-1.5-flash-latest' para evitar erro 404 de modelo
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
             const imagePart = {
                 inlineData: {
@@ -121,9 +120,9 @@ const App: React.FC = () => {
                 throw new Error("A resposta da API estava vazia.");
             }
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Gemini API Error:", err);
-            setError("Falha ao traduzir. Verifique sua conexão ou a validade da sua Chave API.");
+            setError(`Erro na tradução: ${err.message || "Verifique sua Chave API ou conexão."}`);
         } finally {
             setIsLoading(false);
         }
@@ -144,7 +143,7 @@ const App: React.FC = () => {
             <header className="w-full bg-orange-700 text-white shadow-md">
                 <div className="max-w-4xl mx-auto p-4 flex items-center justify-center space-x-3">
                     <EngineeringIcon className="w-8 h-8"/>
-                    <h1 className="text-xl md:text-2xl font-bold uppercase tracking-widest">RD Engenharia | Tradutor Técnico</h1>
+                    <h1 className="text-xl md:text-2xl font-bold uppercase tracking-widest text-center">RD Engenharia | Tradutor Técnico</h1>
                 </div>
             </header>
 
@@ -153,10 +152,10 @@ const App: React.FC = () => {
                     <div className="bg-white p-8 rounded-2xl shadow-xl text-center w-full">
                         <h2 className="text-xl font-medium text-gray-600 mb-8">Captura de Documentos e Projetos</h2>
                         <div className="flex flex-col md:flex-row justify-center gap-6">
-                            <button onClick={() => setIsCameraActive(true)} className="flex items-center justify-center gap-3 bg-orange-600 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-all">
+                            <button onClick={() => setIsCameraActive(true)} className="flex items-center justify-center gap-3 bg-orange-600 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-all active:scale-95">
                                <CameraIcon className="w-6 h-6"/> Abrir Câmera
                             </button>
-                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-3 bg-gray-800 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-black transition-all">
+                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-3 bg-gray-800 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-black transition-all active:scale-95">
                                 <UploadIcon className="w-6 h-6"/> Galeria de Fotos
                             </button>
                             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
@@ -166,10 +165,10 @@ const App: React.FC = () => {
                 
                 {isCameraActive && (
                     <div className="w-full flex flex-col items-center gap-4">
-                        <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-xl shadow-2xl border-4 border-orange-700"/>
+                        <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-xl shadow-2xl border-4 border-orange-700 bg-black"/>
                         <div className="flex gap-4">
-                            <button onClick={handleCapture} className="bg-orange-700 text-white font-bold px-8 py-4 rounded-full shadow-lg">Tirar Foto</button>
-                            <button onClick={() => setIsCameraActive(false)} className="bg-gray-500 text-white font-bold px-8 py-4 rounded-full">Cancelar</button>
+                            <button onClick={handleCapture} className="bg-orange-700 text-white font-bold px-8 py-4 rounded-full shadow-lg active:scale-95">Tirar Foto</button>
+                            <button onClick={() => setIsCameraActive(false)} className="bg-gray-500 text-white font-bold px-8 py-4 rounded-full active:scale-95">Cancelar</button>
                         </div>
                     </div>
                 )}
@@ -179,32 +178,40 @@ const App: React.FC = () => {
                         <img src={imagePreview} alt="Preview" className="w-full max-w-md rounded-lg shadow-lg border-2 border-gray-300" />
                         
                         {!translatedText && !isLoading && (
-                             <button onClick={handleTranslate} className="bg-orange-700 text-white font-black px-12 py-5 rounded-xl text-xl shadow-2xl hover:bg-orange-800 animate-bounce">
+                             <button onClick={handleTranslate} className="bg-orange-700 text-white font-black px-12 py-5 rounded-xl text-xl shadow-2xl hover:bg-orange-800 animate-pulse active:scale-95">
                                 EXECUTAR TRADUÇÃO
                             </button>
                         )}
 
-                        <div className="w-full bg-white rounded-xl shadow-2xl p-6 border-t-8 border-orange-700">
+                        <div className="w-full bg-white rounded-xl shadow-2xl p-6 border-t-8 border-orange-700 min-h-[150px]">
                             <h3 className="text-lg font-bold text-orange-900 mb-4 border-b pb-2">LAUDO DE TRADUÇÃO TÉCNICA:</h3>
                             {isLoading && (
-                                <div className="flex items-center gap-3 text-orange-700 font-bold">
+                                <div className="flex items-center gap-3 text-orange-700 font-bold justify-center py-4">
                                     <div className="w-4 h-4 bg-orange-700 rounded-full animate-ping"></div>
                                     Processando Inteligência Artificial...
                                 </div>
                             )}
-                            {error && <p className="text-red-600 p-4 bg-red-50 rounded border border-red-200">{error}</p>}
-                            {translatedText && <p className="text-gray-800 text-lg leading-relaxed">{translatedText}</p>}
+                            {error && (
+                                <div className="text-red-600 p-4 bg-red-50 rounded border border-red-200">
+                                    <strong>Erro:</strong> {error}
+                                </div>
+                            )}
+                            {translatedText && (
+                                <div className="text-gray-800 text-lg leading-relaxed whitespace-pre-wrap">
+                                    {translatedText}
+                                </div>
+                            )}
                         </div>
 
-                        <button onClick={resetState} className="text-gray-500 underline font-medium hover:text-orange-700">
+                        <button onClick={resetState} className="text-gray-500 underline font-medium hover:text-orange-700 transition-colors">
                             Limpar e Iniciar Nova Captura
                         </button>
                     </div>
                 )}
             </main>
             
-            <footer className="p-4 text-center text-gray-400 text-sm">
-                Desenvolvido para RD Engenharia &copy; 2026
+            <footer className="p-4 text-center text-gray-400 text-xs">
+                Desenvolvido para RD Engenharia &copy; 2026 | Powered by Gemini AI
             </footer>
         </div>
     );
