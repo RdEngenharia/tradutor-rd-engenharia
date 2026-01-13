@@ -97,12 +97,11 @@ const App: React.FC = () => {
         setTranslatedText(null);
 
         try {
-            // CORREÇÃO: Inicialização com apiVersion v1beta
+            // AJUSTE: Removendo o v1beta e usando a versão estável
             const genAI = new GoogleGenerativeAI(API_KEY);
-            const model = genAI.getGenerativeModel(
-                { model: "gemini-1.5-flash" }, 
-                { apiVersion: 'v1beta' }
-            );
+            
+            // AJUSTE: Usando o modelo estável sem sufixos
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
             const imagePart = {
                 inlineData: {
@@ -113,6 +112,7 @@ const App: React.FC = () => {
 
             const prompt = 'Traduza o texto técnico desta imagem de engenharia para o Português do Brasil. Mantenha a terminologia técnica apropriada.';
 
+            // O SDK cuidará de montar a URL correta (v1 em vez de v1beta)
             const result = await model.generateContent([prompt, imagePart]);
             const response = await result.response;
             const text = response.text();
@@ -125,20 +125,11 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error("Gemini API Error:", err);
-            // Captura o erro específico 404 ou 403 e exibe amigavelmente
-            const errMsg = err.message || "";
-            if (errMsg.includes("404")) {
-                setError("Modelo não encontrado (404). Verifique se o nome do modelo está correto.");
-            } else if (errMsg.includes("403")) {
-                setError("Acesso negado (403). Sua Chave API pode estar inválida ou sem permissões.");
-            } else {
-                setError(`Falha: ${errMsg}`);
-            }
+            setError(`Erro: ${err.message}`);
         } finally {
             setIsLoading(false);
         }
     };
-
     const resetState = () => {
         setImagePreview(null);
         setImageDataForApi(null);
