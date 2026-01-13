@@ -1,0 +1,7 @@
+{
+  "name": "AI Real-time Translator",
+  "description": "A web application that uses your device's camera to capture text from images and translates it into your desired language using the power of Google's Gemini API.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
