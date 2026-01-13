@@ -5,12 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
-      // ADICIONE ESTA LINHA ABAIXO:
+      // ESTA LINHA É O QUE RESOLVE O ERRO 404
       base: '/tradutor-rd-engenharia/', 
-      server: {
-        port: 3000,
-        host: '0.0.0.0',
-      },
       plugins: [react()],
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
@@ -20,6 +16,10 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      server: {
+        port: 3000,
+        host: '0.0.0.0',
       }
     };
 });
