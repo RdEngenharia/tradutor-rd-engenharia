@@ -88,7 +88,7 @@ const App: React.FC = () => {
             return;
         }
         if (!API_KEY) {
-            setError("Chave de API ausente (VITE_GEMINI_API_KEY).");
+            setError("Chave de API ausente. Verifique as variáveis de ambiente.");
             return;
         }
 
@@ -97,11 +97,12 @@ const App: React.FC = () => {
         setTranslatedText(null);
 
         try {
-            // AJUSTE: Removendo o v1beta e usando a versão estável
+            // INICIALIZAÇÃO DEFINITIVA: Forçando apiVersion 'v1' para evitar o erro 404
             const genAI = new GoogleGenerativeAI(API_KEY);
-            
-            // AJUSTE: Usando o modelo estável sem sufixos
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel(
+                { model: "gemini-1.5-flash" },
+                { apiVersion: 'v1' }
+            );
 
             const imagePart = {
                 inlineData: {
@@ -110,9 +111,8 @@ const App: React.FC = () => {
                 },
             };
 
-            const prompt = 'Traduza o texto técnico desta imagem de engenharia para o Português do Brasil. Mantenha a terminologia técnica apropriada.';
+            const prompt = "Você é um especialista em engenharia. Traduza o texto técnico desta imagem para o Português do Brasil de forma clara e profissional.";
 
-            // O SDK cuidará de montar a URL correta (v1 em vez de v1beta)
             const result = await model.generateContent([prompt, imagePart]);
             const response = await result.response;
             const text = response.text();
@@ -120,16 +120,17 @@ const App: React.FC = () => {
             if (text) {
                 setTranslatedText(text.trim());
             } else {
-                throw new Error("A IA não retornou nenhum texto.");
+                throw new Error("A IA não retornou resultados.");
             }
 
         } catch (err: any) {
-            console.error("Gemini API Error:", err);
-            setError(`Erro: ${err.message}`);
+            console.error("Erro na Chamada API:", err);
+            setError(`Erro na tradução: ${err.message || "Falha na comunicação com o Google Gemini."}`);
         } finally {
             setIsLoading(false);
         }
     };
+
     const resetState = () => {
         setImagePreview(null);
         setImageDataForApi(null);
@@ -152,13 +153,13 @@ const App: React.FC = () => {
             <main className="flex-grow flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto">
                 {!imagePreview && !isCameraActive && (
                     <div className="bg-white p-8 rounded-2xl shadow-xl text-center w-full">
-                        <h2 className="text-xl font-medium text-gray-600 mb-8">Captura de Documentos Técnicos</h2>
+                        <h2 className="text-xl font-medium text-gray-600 mb-8">Captura de Documentos e Projetos</h2>
                         <div className="flex flex-col md:flex-row justify-center gap-6">
                             <button onClick={() => setIsCameraActive(true)} className="flex items-center justify-center gap-3 bg-orange-600 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-all active:scale-95">
-                               <CameraIcon className="w-6 h-6"/> Usar Câmera
+                               <CameraIcon className="w-6 h-6"/> Abrir Câmera
                             </button>
                             <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-3 bg-gray-800 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-black transition-all active:scale-95">
-                                <UploadIcon className="w-6 h-6"/> Abrir Arquivo
+                                <UploadIcon className="w-6 h-6"/> Galeria de Fotos
                             </button>
                             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                         </div>
@@ -169,7 +170,7 @@ const App: React.FC = () => {
                     <div className="w-full flex flex-col items-center gap-4">
                         <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-xl shadow-2xl border-4 border-orange-700 bg-black"/>
                         <div className="flex gap-4">
-                            <button onClick={handleCapture} className="bg-orange-700 text-white font-bold px-8 py-4 rounded-full shadow-lg active:scale-95">Capturar Foto</button>
+                            <button onClick={handleCapture} className="bg-orange-700 text-white font-bold px-8 py-4 rounded-full shadow-lg active:scale-95">Tirar Foto</button>
                             <button onClick={() => setIsCameraActive(false)} className="bg-gray-500 text-white font-bold px-8 py-4 rounded-full active:scale-95">Cancelar</button>
                         </div>
                     </div>
@@ -181,21 +182,21 @@ const App: React.FC = () => {
                         
                         {!translatedText && !isLoading && (
                              <button onClick={handleTranslate} className="bg-orange-700 text-white font-black px-12 py-5 rounded-xl text-xl shadow-2xl hover:bg-orange-800 animate-pulse active:scale-95">
-                                TRADUZIR AGORA
+                                EXECUTAR TRADUÇÃO
                             </button>
                         )}
 
                         <div className="w-full bg-white rounded-xl shadow-2xl p-6 border-t-8 border-orange-700 min-h-[150px]">
-                            <h3 className="text-lg font-bold text-orange-900 mb-4 border-b pb-2">LAUDO DE TRADUÇÃO:</h3>
+                            <h3 className="text-lg font-bold text-orange-900 mb-4 border-b pb-2">LAUDO DE TRADUÇÃO TÉCNICA:</h3>
                             {isLoading && (
                                 <div className="flex items-center gap-3 text-orange-700 font-bold justify-center py-4">
                                     <div className="w-4 h-4 bg-orange-700 rounded-full animate-ping"></div>
-                                    Analizando Imagem...
+                                    Processando Inteligência Artificial...
                                 </div>
                             )}
                             {error && (
                                 <div className="text-red-600 p-4 bg-red-50 rounded border border-red-200">
-                                    <strong>Atenção:</strong> {error}
+                                    <strong>Erro:</strong> {error}
                                 </div>
                             )}
                             {translatedText && (
@@ -206,14 +207,14 @@ const App: React.FC = () => {
                         </div>
 
                         <button onClick={resetState} className="text-gray-500 underline font-medium hover:text-orange-700 transition-colors">
-                            Nova Captura
+                            Limpar e Iniciar Nova Captura
                         </button>
                     </div>
                 )}
             </main>
             
             <footer className="p-4 text-center text-gray-400 text-xs uppercase tracking-widest">
-                RD Engenharia &copy; 2026 | Sistema de Inteligência Artificial
+                Desenvolvido para RD Engenharia &copy; 2026 | Powered by Gemini AI
             </footer>
         </div>
     );
