@@ -18,8 +18,7 @@ const UploadIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-// --- Configuração da API ---
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.API_KEY : '');
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 
 const App: React.FC = () => {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -31,28 +30,20 @@ const App: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    // --- Lógica da Câmera ---
     useEffect(() => {
         let stream: MediaStream | null = null;
         if (isCameraActive) {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-                .then(streamObj => {
-                    stream = streamObj;
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                    }
+                .then(s => {
+                    stream = s;
+                    if (videoRef.current) videoRef.current.srcObject = s;
                 })
-                .catch(err => {
-                    console.error("Camera Error:", err);
-                    setError("Não foi possível acessar a câmera. Verifique as permissões.");
+                .catch(() => {
+                    setError("Permissão de câmera negada.");
                     setIsCameraActive(false);
                 });
         }
-        return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
+        return () => stream?.getTracks().forEach(t => t.stop());
     }, [isCameraActive]);
 
     const handleCapture = useCallback(() => {
@@ -60,8 +51,7 @@ const App: React.FC = () => {
             const canvas = document.createElement('canvas');
             canvas.width = videoRef.current.videoWidth;
             canvas.height = videoRef.current.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
             const dataUrl = canvas.toDataURL('image/jpeg');
             setImagePreview(dataUrl);
             setImageDataForApi(dataUrl.split(',')[1]);
@@ -69,152 +59,114 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                const base64String = reader.result as string;
-                setImagePreview(base64String);
-                setImageDataForApi(base64String.split(',')[1]);
+                const base64 = reader.result as string;
+                setImagePreview(base64);
+                setImageDataForApi(base64.split(',')[1]);
             };
             reader.readAsDataURL(file);
         }
     };
-    
-    const handleTranslate = async () => {
-        if (!imageDataForApi) {
-            setError("Nenhuma imagem selecionada.");
-            return;
-        }
-        if (!API_KEY) {
-            setError("Chave de API ausente. Verifique as variáveis de ambiente.");
-            return;
-        }
 
+    const handleTranslate = async () => {
+        if (!imageDataForApi || !API_KEY) {
+            setError("Selecione uma imagem ou configure a chave API.");
+            return;
+        }
         setIsLoading(true);
         setError(null);
         setTranslatedText(null);
 
         try {
-            // INICIALIZAÇÃO DEFINITIVA: Forçando apiVersion 'v1' para evitar o erro 404
+            // INICIALIZAÇÃO SEGURA: Forçamos a versão v1 da API
             const genAI = new GoogleGenerativeAI(API_KEY);
             const model = genAI.getGenerativeModel(
                 { model: "gemini-1.5-flash" },
-                { apiVersion: 'v1' }
+                { apiVersion: 'v1' } // Isso evita o 404 do v1beta
             );
 
-            const imagePart = {
-                inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: imageDataForApi,
-                },
-            };
+            const prompt = "Traduza todo o texto técnico presente nesta imagem de engenharia para o Português do Brasil. Mantenha os termos técnicos originais quando necessário.";
 
-            const prompt = "Você é um especialista em engenharia. Traduza o texto técnico desta imagem para o Português do Brasil de forma clara e profissional.";
-
-            const result = await model.generateContent([prompt, imagePart]);
+            const result = await model.generateContent([
+                prompt,
+                { inlineData: { mimeType: "image/jpeg", data: imageDataForApi } }
+            ]);
+            
             const response = await result.response;
-            const text = response.text();
-
-            if (text) {
-                setTranslatedText(text.trim());
-            } else {
-                throw new Error("A IA não retornou resultados.");
-            }
-
+            setTranslatedText(response.text());
         } catch (err: any) {
-            console.error("Erro na Chamada API:", err);
-            setError(`Erro na tradução: ${err.message || "Falha na comunicação com o Google Gemini."}`);
+            console.error("API Error:", err);
+            setError(`Falha na IA: ${err.message.includes("404") ? "Modelo não encontrado. Verifique se sua chave API é válida para o Gemini 1.5." : err.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const resetState = () => {
-        setImagePreview(null);
-        setImageDataForApi(null);
-        setTranslatedText(null);
-        setError(null);
-        setIsLoading(false);
-        setIsCameraActive(false);
-        if(fileInputRef.current) fileInputRef.current.value = "";
-    };
-
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col font-sans">
-            <header className="w-full bg-orange-700 text-white shadow-md">
-                <div className="max-w-4xl mx-auto p-4 flex items-center justify-center space-x-3">
+        <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+            <header className="bg-orange-700 text-white p-5 shadow-lg">
+                <div className="max-w-4xl mx-auto flex items-center justify-center gap-3">
                     <EngineeringIcon className="w-8 h-8"/>
-                    <h1 className="text-xl md:text-2xl font-bold uppercase tracking-widest text-center">RD Engenharia | Tradutor Técnico</h1>
+                    <h1 className="text-xl font-bold uppercase tracking-widest">RD Engenharia | Tradutor IA</h1>
                 </div>
             </header>
 
-            <main className="flex-grow flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto">
-                {!imagePreview && !isCameraActive && (
-                    <div className="bg-white p-8 rounded-2xl shadow-xl text-center w-full">
-                        <h2 className="text-xl font-medium text-gray-600 mb-8">Captura de Documentos e Projetos</h2>
-                        <div className="flex flex-col md:flex-row justify-center gap-6">
-                            <button onClick={() => setIsCameraActive(true)} className="flex items-center justify-center gap-3 bg-orange-600 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-orange-700 transition-all active:scale-95">
-                               <CameraIcon className="w-6 h-6"/> Abrir Câmera
-                            </button>
-                            <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-3 bg-gray-800 text-white px-10 py-5 rounded-xl font-bold shadow-lg hover:bg-black transition-all active:scale-95">
-                                <UploadIcon className="w-6 h-6"/> Galeria de Fotos
-                            </button>
-                            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+            <main className="flex-grow p-4 max-w-4xl mx-auto w-full flex flex-col items-center justify-center">
+                {!imagePreview && !isCameraActive ? (
+                    <div className="bg-white p-10 rounded-3xl shadow-xl flex flex-col gap-6 w-full max-w-md text-center">
+                        <h2 className="text-gray-600 font-medium">Selecione o documento técnico</h2>
+                        <button onClick={() => setIsCameraActive(true)} className="bg-orange-600 text-white p-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-orange-700 transition-colors">
+                            <CameraIcon className="w-6 h-6"/> Usar Câmera
+                        </button>
+                        <button onClick={() => fileInputRef.current?.click()} className="bg-gray-800 text-white p-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 hover:bg-black transition-colors">
+                            <UploadIcon className="w-6 h-6"/> Carregar Arquivo
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                    </div>
+                ) : isCameraActive ? (
+                    <div className="flex flex-col gap-4 items-center w-full">
+                        <video ref={videoRef} autoPlay playsInline className="rounded-2xl border-4 border-orange-700 w-full max-w-sm bg-black shadow-2xl" />
+                        <div className="flex gap-3">
+                            <button onClick={handleCapture} className="bg-orange-700 text-white px-8 py-4 rounded-full font-bold shadow-lg">Capturar Foto</button>
+                            <button onClick={() => setIsCameraActive(false)} className="bg-gray-500 text-white px-8 py-4 rounded-full font-bold">Voltar</button>
                         </div>
                     </div>
-                )}
-                
-                {isCameraActive && (
-                    <div className="w-full flex flex-col items-center gap-4">
-                        <video ref={videoRef} autoPlay playsInline className="w-full max-w-md rounded-xl shadow-2xl border-4 border-orange-700 bg-black"/>
-                        <div className="flex gap-4">
-                            <button onClick={handleCapture} className="bg-orange-700 text-white font-bold px-8 py-4 rounded-full shadow-lg active:scale-95">Tirar Foto</button>
-                            <button onClick={() => setIsCameraActive(false)} className="bg-gray-500 text-white font-bold px-8 py-4 rounded-full active:scale-95">Cancelar</button>
-                        </div>
-                    </div>
-                )}
-
-                {imagePreview && (
-                    <div className="w-full flex flex-col items-center gap-6">
-                        <img src={imagePreview} alt="Preview" className="w-full max-w-md rounded-lg shadow-lg border-2 border-gray-300" />
+                ) : (
+                    <div className="w-full flex flex-col gap-6 items-center">
+                        <img src={imagePreview!} className="max-w-sm rounded-2xl shadow-2xl border-2 border-gray-200" alt="Preview" />
                         
                         {!translatedText && !isLoading && (
-                             <button onClick={handleTranslate} className="bg-orange-700 text-white font-black px-12 py-5 rounded-xl text-xl shadow-2xl hover:bg-orange-800 animate-pulse active:scale-95">
-                                EXECUTAR TRADUÇÃO
+                            <button onClick={handleTranslate} className="bg-orange-700 text-white px-12 py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-orange-800 transition-all active:scale-95">
+                                TRADUZIR DOCUMENTO
                             </button>
                         )}
 
-                        <div className="w-full bg-white rounded-xl shadow-2xl p-6 border-t-8 border-orange-700 min-h-[150px]">
-                            <h3 className="text-lg font-bold text-orange-900 mb-4 border-b pb-2">LAUDO DE TRADUÇÃO TÉCNICA:</h3>
+                        <div className="bg-white p-6 rounded-2xl shadow-2xl w-full border-t-8 border-orange-700 min-h-[200px] relative">
+                            <h3 className="font-bold text-orange-900 border-b pb-2 mb-4">TRADUÇÃO TÉCNICA:</h3>
                             {isLoading && (
-                                <div className="flex items-center gap-3 text-orange-700 font-bold justify-center py-4">
-                                    <div className="w-4 h-4 bg-orange-700 rounded-full animate-ping"></div>
-                                    Processando Inteligência Artificial...
+                                <div className="flex items-center gap-3 text-orange-700 animate-pulse font-bold justify-center py-10">
+                                    <div className="w-3 h-3 bg-orange-700 rounded-full animate-bounce"></div>
+                                    Processando Engenharia...
                                 </div>
                             )}
-                            {error && (
-                                <div className="text-red-600 p-4 bg-red-50 rounded border border-red-200">
-                                    <strong>Erro:</strong> {error}
-                                </div>
-                            )}
+                            {error && <div className="text-red-600 p-4 bg-red-50 rounded-lg border border-red-100 font-medium">{error}</div>}
                             {translatedText && (
-                                <div className="text-gray-800 text-lg leading-relaxed whitespace-pre-wrap">
+                                <div className="text-gray-800 text-lg leading-relaxed whitespace-pre-wrap animate-in fade-in duration-500">
                                     {translatedText}
                                 </div>
                             )}
                         </div>
-
-                        <button onClick={resetState} className="text-gray-500 underline font-medium hover:text-orange-700 transition-colors">
-                            Limpar e Iniciar Nova Captura
-                        </button>
+                        <button onClick={() => {setImagePreview(null); setTranslatedText(null); setError(null);}} className="text-gray-500 underline font-medium py-4">Nova Digitalização</button>
                     </div>
                 )}
             </main>
             
             <footer className="p-4 text-center text-gray-400 text-xs uppercase tracking-widest">
-                Desenvolvido para RD Engenharia &copy; 2026 | Powered by Gemini AI
+                RD Engenharia &copy; 2026 | Tecnologia de Visão Computacional
             </footer>
         </div>
     );
