@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // --- Ícones ---
 const EngineeringIcon = ({ className }: { className?: string }) => (
@@ -16,23 +15,22 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
     
-    // Pegando a chave do ambiente (Vite)
-    const apiKeyFromEnv = import.meta.env.VITE_GEMINI_API_KEY;
-    const [debugInfo, setDebugInfo] = useState<string>("");
+    // Tenta ler os dois nomes possíveis para não ter erro
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY;
+    
+    const [debugInfo, setDebugInfo] = useState<string>("Verificando...");
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    // Diagnóstico de inicialização
     useEffect(() => {
-        if (!apiKeyFromEnv) {
-            setDebugInfo("❌ Chave VITE_GEMINI_API_KEY não detectada.");
+        if (!apiKey) {
+            setDebugInfo("❌ Chave não encontrada no .env");
         } else {
-            setDebugInfo(`✅ Sistema Pronto (Chave ativa)`);
+            setDebugInfo(`✅ Conexão Ativa`);
         }
-    }, [apiKeyFromEnv]);
+    }, [apiKey]);
 
-    // Gerenciamento da Câmera
     useEffect(() => {
         let stream: MediaStream | null = null;
         if (isCameraActive) {
@@ -42,7 +40,7 @@ const App: React.FC = () => {
                     if (videoRef.current) videoRef.current.srcObject = s;
                 })
                 .catch(() => {
-                    setError("Câmera não disponível ou permissão negada.");
+                    setError("Câmera bloqueada.");
                     setIsCameraActive(false);
                 });
         }
@@ -76,136 +74,109 @@ const App: React.FC = () => {
     };
 
     const handleTranslate = async () => {
-        // Trava de segurança: impede envio sem imagem
         if (!imageDataForApi) {
-            setError("Por favor, capture ou carregue uma imagem primeiro.");
+            setError("Capture ou selecione uma imagem primeiro.");
             return;
         }
-
-        if (!apiKeyFromEnv) {
-            setError("Chave API não configurada no servidor.");
+        if (!apiKey) {
+            setError("Chave API não configurada corretamente.");
             return;
         }
 
         setIsLoading(true);
         setError(null);
-        setTranslatedText(null);
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKeyFromEnv);
-            
-            // Configuração estável da API v1 para evitar erro 404
-            const model = genAI.getGenerativeModel(
-                { model: "gemini-1.5-flash" },
-                { apiVersion: 'v1' } 
-            );
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: "Traduza o texto desta imagem técnica para Português do Brasil." },
+                            { inlineData: { mimeType: "image/jpeg", data: imageDataForApi } }
+                        ]
+                    }]
+                })
+            });
 
-            const prompt = "Aja como um engenheiro tradutor. Traduza com precisão técnica todo o texto desta imagem para Português do Brasil.";
+            const data = await response.json();
 
-            const result = await model.generateContent([
-                prompt,
-                { inlineData: { mimeType: "image/jpeg", data: imageDataForApi } }
-            ]);
-            
-            const response = await result.response;
-            const text = response.text();
-            
-            if (!text) throw new Error("A IA não conseguiu identificar texto na imagem.");
-            
-            setTranslatedText(text);
+            if (!response.ok) {
+                throw new Error(data.error?.message || "Erro na API do Google");
+            }
+
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                setTranslatedText(data.candidates[0].content.parts[0].text);
+            } else {
+                throw new Error("Não foi possível ler o texto da imagem.");
+            }
+
         } catch (err: any) {
-            console.error("Erro na API Gemini:", err);
-            // Mensagem amigável para erros comuns
-            const msg = err.message.includes("404") 
-                ? "Modelo não encontrado. Verifique a versão da API." 
-                : err.message;
-            setError(`Falha técnica: ${msg}`);
+            setError(`Falha: ${err.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-4 flex flex-col items-center font-sans">
-            {/* Barra de Status */}
-            <div className="w-full max-w-2xl bg-gray-900 text-green-400 p-2 rounded-t-xl font-mono text-[10px] flex justify-between px-4">
-                <span>RD ENGENHARIA v2.0</span>
+        <div className="min-h-screen bg-gray-100 p-4 flex flex-col items-center font-sans text-gray-900">
+            <div className="w-full max-w-2xl bg-black text-green-400 p-2 rounded-t-xl font-mono text-[10px] flex justify-between px-4">
+                <span>RD-ENGINE-PRO-V6</span>
                 <span>{debugInfo}</span>
             </div>
 
-            <header className="bg-orange-700 text-white p-6 rounded-b-3xl w-full max-w-2xl mb-8 flex items-center justify-center gap-4 shadow-xl border-b-4 border-orange-900">
+            <header className="bg-orange-700 text-white p-6 rounded-b-3xl w-full max-w-2xl mb-8 flex items-center justify-center gap-4 shadow-2xl">
                 <EngineeringIcon className="w-10 h-10"/>
-                <h1 className="text-xl font-black uppercase tracking-tighter">Tradutor Técnico</h1>
+                <h1 className="text-xl font-black uppercase tracking-tighter">TESTE CACHE 123</h1>
             </header>
 
             <main className="w-full max-w-2xl">
                 {!imagePreview && !isCameraActive ? (
-                    <div className="bg-white p-10 rounded-3xl shadow-lg flex flex-col gap-5 border border-gray-200">
-                        <button onClick={() => setIsCameraActive(true)} className="bg-orange-600 text-white p-6 rounded-2xl font-bold text-lg hover:bg-orange-700 transition-all shadow-md active:scale-95">
+                    <div className="bg-white p-10 rounded-3xl shadow-lg flex flex-col gap-5">
+                        <button onClick={() => setIsCameraActive(true)} className="bg-orange-600 text-white p-6 rounded-2xl font-bold text-lg hover:bg-orange-700">
                             📸 TIRAR FOTO DA PLACA
                         </button>
-                        <button onClick={() => fileInputRef.current?.click()} className="bg-gray-800 text-white p-6 rounded-2xl font-bold text-lg hover:bg-black transition-all shadow-md active:scale-95">
-                            📁 CARREGAR ARQUIVO
+                        <button onClick={() => fileInputRef.current?.click()} className="bg-gray-800 text-white p-6 rounded-2xl font-bold text-lg hover:bg-black">
+                            📁 CARREGAR DA GALERIA
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                     </div>
                 ) : isCameraActive ? (
-                    <div className="flex flex-col gap-4 items-center bg-black p-4 rounded-3xl shadow-2xl">
-                        <video ref={videoRef} autoPlay playsInline className="rounded-2xl w-full max-w-sm border-2 border-orange-700" />
+                    <div className="flex flex-col gap-4 items-center bg-black p-4 rounded-3xl">
+                        <video ref={videoRef} autoPlay playsInline className="rounded-2xl w-full max-w-sm border-2 border-orange-600" />
                         <div className="flex gap-4">
-                            <button onClick={handleCapture} className="bg-orange-600 text-white px-10 py-4 rounded-full font-black text-lg shadow-lg active:scale-90">
-                                CAPTURAR
-                            </button>
-                            <button onClick={() => setIsCameraActive(false)} className="bg-white text-black px-6 py-4 rounded-full font-bold">
-                                VOLTAR
-                            </button>
+                            <button onClick={handleCapture} className="bg-orange-600 text-white px-10 py-4 rounded-full font-black">TIRAR FOTO</button>
+                            <button onClick={() => setIsCameraActive(false)} className="bg-white text-black px-6 py-4 rounded-full font-bold">CANCELAR</button>
                         </div>
                     </div>
                 ) : (
                     <div className="flex flex-col gap-6 w-full">
-                        <div className="relative group">
-                            <img src={imagePreview!} className="rounded-3xl shadow-xl max-h-80 w-full object-contain bg-white border-4 border-white" alt="Preview" />
-                            <button onClick={() => {setImagePreview(null); setTranslatedText(null);}} className="absolute -top-2 -right-2 bg-red-600 text-white w-8 h-8 rounded-full shadow-lg font-bold">✕</button>
+                        <div className="relative">
+                            <img src={imagePreview!} className="rounded-3xl shadow-xl max-h-80 w-full object-contain bg-white" alt="Preview" />
+                            <button onClick={() => {setImagePreview(null); setTranslatedText(null); setError(null);}} className="absolute -top-3 -right-3 bg-red-600 text-white w-10 h-10 rounded-full font-bold">✕</button>
                         </div>
                         
                         {!translatedText && (
                             <button 
                                 onClick={handleTranslate} 
                                 disabled={isLoading}
-                                className={`${isLoading ? 'bg-gray-400' : 'bg-orange-700'} text-white p-6 rounded-3xl font-black text-xl shadow-2xl transition-all active:scale-95`}
+                                className={`${isLoading ? 'bg-gray-400' : 'bg-orange-700'} text-white p-6 rounded-3xl font-black text-xl shadow-2xl`}
                             >
-                                {isLoading ? "PROCESSANDO..." : "EXECUTAR TRADUÇÃO"}
+                                {isLoading ? "TRADUZINDO..." : "TRADUZIR AGORA"}
                             </button>
                         )}
 
-                        <div className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-orange-700 min-h-[150px]">
-                            <h3 className="text-orange-900 font-black text-xs uppercase mb-4 tracking-widest flex items-center gap-2">
-                                <span className="w-2 h-2 bg-orange-700 rounded-full animate-pulse"></span>
-                                Resultado da Tradução
-                            </h3>
-                            
-                            {error && (
-                                <div className="text-red-600 bg-red-50 p-4 rounded-xl border border-red-200 font-bold text-sm mb-4 animate-bounce">
-                                    {error}
-                                </div>
-                            )}
-
-                            <div className="text-gray-800 text-lg whitespace-pre-wrap leading-relaxed font-medium italic">
-                                {isLoading ? (
-                                    <div className="flex flex-col items-center py-6 gap-2">
-                                        <div className="w-6 h-6 border-4 border-orange-700 border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-sm text-gray-500 font-bold">A IA está lendo a imagem...</span>
-                                    </div>
-                                ) : (
-                                    translatedText || "O resultado aparecerá aqui."
-                                )}
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border-l-8 border-orange-700">
+                            <h3 className="text-orange-900 font-black text-xs uppercase mb-4">Resultado da Análise</h3>
+                            {error && <div className="text-red-600 bg-red-50 p-4 rounded-xl font-bold text-sm mb-4 border border-red-200">{error}</div>}
+                            <div className="text-gray-800 text-lg leading-relaxed whitespace-pre-wrap">
+                                {isLoading ? "Processando imagem..." : (translatedText || "Aguardando imagem...")}
                             </div>
                         </div>
 
-                        <button 
-                            onClick={() => {setImagePreview(null); setTranslatedText(null); setError(null);}} 
-                            className="text-gray-400 font-bold py-4 hover:text-orange-700 transition-colors uppercase text-xs tracking-widest"
-                        >
+                        <button onClick={() => {setImagePreview(null); setTranslatedText(null); setError(null);}} className="text-gray-500 font-bold py-4 uppercase text-[10px] tracking-widest">
                             Nova Tradução
                         </button>
                     </div>
